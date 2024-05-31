@@ -1,5 +1,12 @@
 import json
 
+
+# Addresses
+# imu 0x50
+# oled 0x3C
+# servo controller 0x40
+# sensor 0x29
+
 class IMU:
     name='_imu_'
     def __init__(self,order,rate):
