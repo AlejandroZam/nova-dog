@@ -1,6 +1,6 @@
 import json
 import sched, time
-
+import threading
 # Addresses
 # imu 0x50
 # oled 0x3C
@@ -39,12 +39,12 @@ class IMU:
 
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
     def updatederivative(self):
         print(self.name+'::updatederivative')
@@ -68,12 +68,12 @@ class LEGS:
         self.count += 1
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
     def updatederivative(self):
         print(self.name+'::updatederivative')
@@ -98,12 +98,12 @@ class CAM:
         
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
     def updatederivative(self):
         print(self.name+'::updatederivative')
@@ -126,12 +126,12 @@ class SENSOR:
         print(self.name+':: update ',self.count)
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
         
     def updatederivative(self):
@@ -156,12 +156,12 @@ class OLED:
         print(self.name+':: update ',self.count)
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
             
     def set_name(self,name):
         self.name = name
@@ -182,12 +182,12 @@ class USERINTERFACE:
         print(self.name+'::update ',self.count)
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
     def set_name(self,name):
         self.name = name
@@ -200,7 +200,8 @@ class ROBOT:
     modules = {}
     updatelist = []
     updatederivative = []
-
+    t1 = None
+    t2 = None 
     alive = True
     status = bot_status[3]
     def __init__(self,):
@@ -227,15 +228,18 @@ class ROBOT:
  
 
         
-        scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+        scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         for k,v in self.modules.items():
             v.set_name(k)
-            scheduler.enter(v.rate,v.order,v.update,(time.time(),))
+            scheduler_1.enter(v.rate,v.order,v.update,(time.time(),))
+
+        self.t1 = threading.Thread(target=scheduler_1.run, name='t1')
+        # t2 = threading.Thread(target=task2, name='t2')
 
     
     def run(self):
-        scheduler.run()
-        
+        # scheduler_1.run()
+        self.t1.start()
     
     def init_params(self):
         print('read init params')
@@ -247,12 +251,12 @@ class ROBOT:
 
         if self.endtime <= curtime:
             try:
-                scheduler.cancel(self.id)
+                scheduler_1.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
         
         
@@ -261,8 +265,14 @@ class ROBOT:
         print('updatederivative')
         
 def main():
-    global scheduler
-    scheduler = sched.scheduler(time.time, time.sleep)
+    global scheduler_1
+    global scheduler_2
+    global scheduler_3
+    global scheduler_4
+    scheduler_1 = sched.scheduler(time.time, time.sleep)
+    # scheduler_2 = sched.scheduler(time.time, time.sleep)
+    # scheduler_3 = sched.scheduler(time.time, time.sleep)
+    # scheduler_4 = sched.scheduler(time.time, time.sleep)
     #init here
     dog = ROBOT()
     
