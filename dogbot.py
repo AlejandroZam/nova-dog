@@ -1,6 +1,8 @@
 import json
 import sched, time
 import threading
+from wt901.imu import WT901
+
 # Addresses
 # imu 0x50
 # oled 0x3C
@@ -98,12 +100,12 @@ class CAM:
         
         if self.endtime <= curtime:
             try:
-                scheduler_1.cancel(self.id)
+                scheduler_2.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_2.enter(self.rate,self.order,self.update,(time.time(),))
         
     def updatederivative(self):
         print(self.name+'::updatederivative')
@@ -182,12 +184,12 @@ class USERINTERFACE:
         print(self.name+'::update ',self.count)
         if self.endtime <= curtime:
             try:
-                scheduler_1.cancel(self.id)
+                scheduler_3.cancel(self.id)
                 return
             except:
                 return
         else:
-            self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
+            self.id = scheduler_3.enter(self.rate,self.order,self.update,(time.time(),))
         
     def set_name(self,name):
         self.name = name
@@ -202,6 +204,7 @@ class ROBOT:
     updatederivative = []
     t1 = None
     t2 = None 
+    t3 = None
     alive = True
     status = bot_status[3]
     def __init__(self,):
@@ -217,29 +220,38 @@ class ROBOT:
         
         self.modules['imu'] = IMU(2,210,self.starttime)
         self.modules['legs'] = LEGS(3,60,self.starttime)
-        self.modules['front_cam'] = CAM(4,30,self.starttime)
+        self.modules['front_cam'] = CAM(1,30,self.starttime)
         self.modules['voltagesensor'] = SENSOR(5,3,self.starttime)
         self.modules['tof_1'] = SENSOR(6,5,self.starttime)
         self.modules['tof_2'] = SENSOR(7,5,self.starttime)
         self.modules['tof_3'] = SENSOR(8,5,self.starttime)
         self.modules['tof_4'] = SENSOR(9,5,self.starttime)
         self.modules['tof_5'] = SENSOR(10,5,self.starttime)
-        self.modules['xbox_input'] = USERINTERFACE(11,10,self.starttime)
+        self.modules['xbox_input'] = USERINTERFACE(1,10,self.starttime)
  
 
         
         scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         for k,v in self.modules.items():
             v.set_name(k)
-            scheduler_1.enter(v.rate,v.order,v.update,(time.time(),))
+            if k == 'xbox_input':
+                scheduler_3.enter(v.rate,v.order,v.update,(time.time(),))
+            elif k == 'front_cam':
+                scheduler_2.enter(v.rate,v.order,v.update,(time.time(),))
+            else:
+                scheduler_1.enter(v.rate,v.order,v.update,(time.time(),))
 
         self.t1 = threading.Thread(target=scheduler_1.run, name='t1')
+        self.t2 = threading.Thread(target=scheduler_2.run, name='t2')   
+        self.t3 = threading.Thread(target=scheduler_3.run, name='t3')  
         # t2 = threading.Thread(target=task2, name='t2')
 
     
     def run(self):
         # scheduler_1.run()
         self.t1.start()
+        self.t2.start()
+        self.t3.start()
     
     def init_params(self):
         print('read init params')
@@ -255,6 +267,17 @@ class ROBOT:
                 return
             except:
                 return
+            
+
+
+
+
+
+
+
+
+
+            
         else:
             self.id = scheduler_1.enter(self.rate,self.order,self.update,(time.time(),))
         
@@ -270,8 +293,8 @@ def main():
     global scheduler_3
     global scheduler_4
     scheduler_1 = sched.scheduler(time.time, time.sleep)
-    # scheduler_2 = sched.scheduler(time.time, time.sleep)
-    # scheduler_3 = sched.scheduler(time.time, time.sleep)
+    scheduler_2 = sched.scheduler(time.time, time.sleep)
+    scheduler_3 = sched.scheduler(time.time, time.sleep)
     # scheduler_4 = sched.scheduler(time.time, time.sleep)
     #init here
     dog = ROBOT()

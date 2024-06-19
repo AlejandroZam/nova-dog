@@ -6,13 +6,6 @@ from time import sleep
 import busio
 import board
 import numpy as np
-# cfg = config.getConfigVals()
-
-
-# print(cfg.WIT_SAVE)
-# print(cfg.WIT_CALSW)
-# print(cfg.WIT_SAVECONF)
-# print(cfg.WIT_UNLOCK)
 
 
 
@@ -91,21 +84,6 @@ class WT901:
          return data
       else:
          return data
-
-   # def writeRegister(self,subaddress,byte):
-   #    self.Bus.write_byte(self.Address,subaddress, byte)
-      
-   # def writeRegister(self,subaddress,word):
-   #    self.Bus.write_word_data(self.Address,subaddress, word)
-      
-   # def writeRegister(self,subaddress,bytearray):
-   #    self.Bus.write_i2c_block_data(self.Address,subaddress, bytearray)
-      
-
-      
-      
-   # def writeRegister(self,subaddress,data):
-   #    self.Bus.write_byte_data(self.Address,subaddress, data)
 
    def read_RSW(self):
       data = self.readRegisters(self.cfg.WIT_RSW,2)
@@ -321,29 +299,6 @@ high0 = data[1]
 data = [(high0<<8) | low0 ]
 print(data)
 
-# data = imu.readRegisters(imu.cfg.WIT_CALSW,2)
-# print(data)
-
-# imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_CALSW,value2)
-# sleep(5)
-# imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_CALSW,value3)
-# sleep(5)
-
-# data = imu.readRegisters(imu.cfg.WIT_CALSW,2)
-# print(data)
-
-# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_RRATE,[value])
-# imu.Bus.write_block_data(imu.Address,imu.cfg.WIT_RRATE,[value])
-# response1 = imu.Bus.block_process_call(imu.Address,imu.cfg.WIT_RRATE,[value])
-# response2 = imu.Bus.process_call(imu.Address,imu.cfg.WIT_RRATE,value)
-
-
-
-# print(response1)
-# print(response2)
-# imu.writeRegister(0x00,imu.cfg.WIT_RPTRT)
-# imu.writeRegister(imu.cfg.WIT_SAVECONF)
-
 
 
 imu.read_RRATE()
@@ -360,6 +315,15 @@ while True:
    dt = newTime - currTime
    currTime = newTime
    print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
+
+   print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
+
+   print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
+
+   print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
+
+   print("temp:{0} ".format(imu.temp))
+
 
    totTime = currTime - startTime
    if totTime >= 1:
