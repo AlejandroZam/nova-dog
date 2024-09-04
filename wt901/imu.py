@@ -6,7 +6,7 @@ from time import sleep
 import busio
 import board
 import numpy as np
-
+import datetime
 
 
 RRATEDataDef = {  0x01:0.2,
@@ -58,7 +58,7 @@ class WT901:
    accelX = 0.0
    accelY = 0.0
    accelZ = 0.0
-   
+    
    angVelX = 0.0 
    angVelY = 0.0
    angVelZ = 0.0
@@ -67,8 +67,8 @@ class WT901:
    pitch = 0.0
    yaw = 0.0
    
-   temp= 0.0
-   
+   tempC = 0.0
+   tempF = (tempC * 9/5) + 32
    def __init__(self, bus, address):
       self.cfg = config.getConfigVals()
       self.Address = address
@@ -146,20 +146,26 @@ class WT901:
       low0 = datax[0]
       high0 = datax[1]
       datax = [(high0<<8) | low0 ]
-      self.accelX = datax[0]/32768*16*(9.8)
+      self.accelX = datax[0]/32768*16
+      if self.accelX >= 16:
+         self.accelX -= 2*16
       
       datay = self.readRegisters(self.cfg.WIT_AY,2)
       low0 = datay[0]
       high0 = datay[1]
       datay = [(high0<<8) | low0 ]
-      self.accelY = datay[0]/32768*16*(9.8)
-      
+      self.accelY = datay[0]/32768*16
+      if self.accelY >= 16:
+         self.accelY -= 2*16
+
       dataz = self.readRegisters(self.cfg.WIT_AZ,2)
       low0 = dataz[0]
       high0 = dataz[1]
       dataz = [(high0<<8) | low0 ]
-      self.accelZ = dataz[0]/32768*16*(9.8)
-  
+      self.accelZ = dataz[0]/32768*16
+      if self.accelZ >= 16:
+         self.accelZ -= 2*16
+         
       if verbose:
          print('acceleration x dir')
          print('[{}]'.format(', '.join(hex(x) for x in datax)))
@@ -181,20 +187,26 @@ class WT901:
       low0 = datax[0]
       high0 = datax[1]
       datax = [(high0<<8) | low0 ]
-      self.angVelX = datax[0]/32768*2000
+      self.angVelX = datax[0]/32768.0*2000.0
+      if self.angVelX >= 2000.0:
+         self.angVelX -= 2*2000.0
       
       datay = self.readRegisters(self.cfg.WIT_GY,2)
       low0 = datay[0]
       high0 = datay[1]
       datay = [(high0<<8) | low0 ]
-      self.angVelY = datay[0]/32768*2000
-      
+      self.angVelY = datay[0]/32768.0*2000.0
+      if self.angVelY >= 2000.0:
+         self.angVelY -= 2*2000.0
+         
       dataz = self.readRegisters(self.cfg.WIT_GZ,2)
       low0 = dataz[0]
       high0 = dataz[1]
       dataz = [(high0<<8) | low0 ]
-      self.angVelZ = dataz[0]/32768*2000
-      
+      self.angVelZ = dataz[0]/32768.0*2000.0
+      if self.angVelZ >= 2000.0:
+         self.angVelZ -= 2*2000.0
+         
       if verbose:
          print('angular velocity x dir')
          print('[{}]'.format(', '.join(hex(x) for x in datax)))
@@ -217,19 +229,24 @@ class WT901:
       high0 = dataroll[1]
       dataroll = [(high0<<8) | low0 ]
       self.roll = dataroll[0]/32768*180
-      
+      if self.roll >= 180.0:
+         self.roll -= 2*180.0
+         
       datapitch = self.readRegisters(self.cfg.WIT_Pitch,2)
       low0 = datapitch[0]
       high0 = datapitch[1]
       datapitch = [(high0<<8) | low0 ]
       self.pitch = datapitch[0]/32768*180
-      
+      if self.pitch >= 180.0:
+         self.pitch -= 2*180.0
+         
       datayaw = self.readRegisters(self.cfg.WIT_Yaw,2)
       low0 = datayaw[0]
       high0 = datayaw[1]
       datayaw = [(high0<<8) | low0 ]
       self.yaw = datayaw[0]/32768*180
-      
+      if self.yaw >= 180.0:
+         self.yaw -= 2*180.0
       
       if verbose:
          print('angle roll dir')
@@ -252,13 +269,80 @@ class WT901:
       low0 = data[0]
       high0 = data[1]
       data = [(high0<<8) | low0 ]
-      self.temp = data[0]/100
+      self.tempC = data[0]/100
+      self.tempF = (self.tempC * 9/5) + 32
       if verbose:
-      
          print('temp')
          print('[{}]'.format(', '.join(hex(x) for x in data)))
          print('[{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data)))
-         print(self.temp)
+         print(self.tempC)
+      
+   def unlock(self):
+      self.Bus.write_i2c_block_data(self.Address,0x69,[0x88, 0xb5])
+      
+   def save(self):
+      self.Bus.write_word_data(self.Address,self.cfg.WIT_RRATE,0x00) 
+      
+   def set_Time(self):
+      t = datetime.datetime.now()
+      
+      yy = t.year-2000
+      mm = t.month
+      yymm = [yy&0xff,yy >>8,mm&0xff,mm >>8]
+      
+      dd = t.day 
+      hh = t.hour
+      ddhh = [dd&0xff,dd >>8,hh&0xff,hh >>8]
+      
+      mm = t.minute
+      ss = t.second
+      mmss = [mm&0xff,mm >>8,ss&0xff,ss >>8]
+      
+      ms = [t.microsecond]
+      self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_YYMM,yymm) 
+      self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_DDHH,ddhh) 
+      self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_MMSS,mmss) 
+      self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_MS,ms)
+      
+   def get_Time(self):
+      
+      datayymm = imu.readRegisters(imu.cfg.WIT_YYMM,4)
+      low0 = datayymm[0]
+      high0 = datayymm[1]
+      low1 = datayymm[2]
+      high1 = datayymm[3]
+
+      year = [(high0<<8) | low0 ][0] + 2000
+      month = [(high1<<8) | low1 ][0]
+
+      
+      dataddhh = imu.readRegisters(imu.cfg.WIT_DDHH,4)
+      low0 = dataddhh[0]
+      high0 = dataddhh[1]
+      low1 = dataddhh[2]
+      high1 = dataddhh[3]
+
+      day = [(high0<<8) | low0 ]
+      hour = [(high1<<8) | low1 ]
+      
+      datammss = imu.readRegisters(imu.cfg.WIT_MMSS,4)
+      low0 = datammss[0]
+      high0 = datammss[1]
+      low1 = datammss[2]
+      high1 = datammss[3]
+
+      min = [(high0<<8) | low0 ]
+      sec = [(high1<<8) | low1 ]
+      
+      datams = imu.readRegisters(imu.cfg.WIT_MS,2)
+      low0 = datams[0]
+      high0 = datams[1]
+
+      ms = [(high0<<8) | low0 ]
+ 
+      print('year: ',year,' month: ', month,' day: ', day,' hour: ', hour,' min: ',min,' sec: ',sec,' ms: ',ms)
+   
+ 
       
    def update(self):
       self.read_Acceleration()
@@ -272,64 +356,184 @@ bus = smbus.SMBus(1)
 
 imu = WT901(bus,address)
 
-print(imu.rate)
-print(imu.baud)
-print(imu.datacontent)
-print(imu.Address)
+print('rate: ',imu.rate)
+print('baud: ',imu.baud)
+print('datacontent: ',imu.datacontent)
+print('address: ',imu.Address)
 
 # imu.writeRegister(imu.cfg.WIT_UNLOCK)
 
-value1 = (0x00 <<8) |0x09 
-value2 = (0x00 <<8) |0x01 
-value3 = (0x00 <<8) |0x00 
+value1 = (0x00 <<8) |0x09 # rate 100
+value2 = (0x07 <<8) |0xe8# yy
+value3 = (0x00 <<8) |0x08 # mm
 value4 = (0x00 <<8) |0x32 
 value4 = (0x01 <<8) |0xf4 
 
-imu.Bus.write_i2c_block_data(imu.Address,0x69,[0x88, 0xb5])
+imu.unlock()
 
-# imu.Bus.write_byte_data(imu.Address,imu.cfg.WIT_RRATE,value)
+imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_RRATE,value1) # rate
 
-imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_RRATE,value1)
-imu.Bus.write_word_data(imu.Address,0x61,value4)
-imu.Bus.write_word_data(imu.Address,0x63,value4)
-
-data = imu.readRegisters(0x63,2)
-low0 = data[0]
-high0 = data[1]
-data = [(high0<<8) | low0 ]
-print(data)
-
+imu.set_Time()
+imu.save()
 
 
 imu.read_RRATE()
-print(imu.rate)
+print('set rate to: ',imu.rate)
+
+# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_YYMM,[0x18,0x00,0x08,0x00]) # yy mm
+
+# data = imu.readRegisters(imu.cfg.WIT_YYMM,4)
+
+# data1 = [(high1<<8) | low1 ]
+# print('time mm')
+# print('decimal: ' ,data1)
+# print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
+# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
+
+
+# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_DDHH,[0x1e,0x00,0x02,0x00]) # dd hh
+
+# data = imu.readRegisters(imu.cfg.WIT_DDHH,4)
+# low0 = data[0]
+# high0 = data[1]
+# low1 = data[2]
+# high1 = data[3]
+
+# data0 = [(high0<<8) | low0 ]
+# print('time dd')
+# print('decimal: ' ,data0)
+# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
+# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
+
+# data1 = [(high1<<8) | low1 ]
+# print('time hh')
+# print('decimal: ' ,data1)
+# print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
+# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
+
+
+# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_MMSS,[0x0f,0x00,0x1e,0x00]) # mm ss
+
+# data = imu.readRegisters(imu.cfg.WIT_MMSS,4)
+# low0 = data[0]
+# high0 = data[1]
+# low1 = data[2]
+# high1 = data[3]
+
+# data0 = [(high0<<8) | low0 ]
+# print('time mm')
+# print('decimal: ' ,data0)
+# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
+# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
+
+# data1 = [(high1<<8) | low1 ]
+# print('time ss')
+# print('decimal: ' ,data1)
+# print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
+# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
+
+# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_MS,[0xf4,0x01]) # mm ss
+
+# data = imu.readRegisters(imu.cfg.WIT_MS,2)
+# low0 = data[0]
+# high0 = data[1]
+
+# data0 = [(high0<<8) | low0 ]
+# print('time ms')
+# print('decimal: ' ,data0)
+# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
+# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
+
+
+
+
+
+# imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_CALSW,[0x03]) # calibrate
+
+# imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_CALSW,[0x02]) # calibrate
+value4 = (0x01 <<8) |0xf4 
+
+value4 = (0x00 <<8) |0x00 
+imu.Bus.write_word_data(imu.Address,0x63,value4)
+time.sleep(1)
+
+value4 = (0x00 <<8) |0x00 
+imu.Bus.write_word_data(imu.Address,0x24,value4)
+
+time.sleep(1)
+value4 = (0x00 <<8) |0x00 
+imu.Bus.write_word_data(imu.Address,0x00,value4)
+
+# imu.Bus.write_word_data(imu.Address,0x61,value4)
+
+
+# data = imu.readRegisters(0x63,2)
+# low0 = data[0]
+# high0 = data[1]
+# data = [(high0<<8) | low0 ]
+# print(data)
+
+
+data = imu.readRegisters(0x1a,2)
+low0 = data[0]
+high0 = data[1]
+data = [(high0<<8) | low0 ]
+print('address')
+print('decimal: ' ,data)
+print('hex: [{}]'.format(', '.join(hex(x) for x in data)))
+print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data)))
+
+
+
 
 imu.update()
+
+imu.get_Time()
+
 startTime = time.time()
 currTime = startTime
 
-while True:
-   imu.update()
+# print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
+
+# print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
+
+# print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
+
+# print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
+
+# print("temp:{0} ".format(imu.temp))
+
+
+
+
+
+
+# while True:
+#    imu.update()
    
-   newTime = time.time()
-   dt = newTime - currTime
-   currTime = newTime
-   print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
+#    newTime = time.time()
+#    dt = newTime - currTime
+#    currTime = newTime
+#    print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
 
-   print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
+#    print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
 
-   print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
+#    print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
 
-   print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
+#    print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
 
-   print("temp:{0} ".format(imu.temp))
+#    print("temp:{0} ".format(imu.tempF))
 
 
-   totTime = currTime - startTime
-   if totTime >= 1:
-      break
+#    totTime = currTime - startTime
+#    if totTime >= 10:
+#       break
    
-   time.sleep(0.01)
+#    time.sleep(0.1)
+   
+   
+   
+   
 # print('ax offset')
 # data = imu.readRegisters(imu.cfg.WIT_AXOFFSET,2)
 # print('[{}]'.format(', '.join(hex(x) for x in data)))
