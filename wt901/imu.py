@@ -7,7 +7,7 @@ import busio
 import board
 import numpy as np
 import datetime
-
+import struct
 
 RRATEDataDef = {  0x01:0.2,
                   0x02:0.5,
@@ -65,6 +65,12 @@ SAVE_SWRST = 0xFF
 ORIENT_HERIZONE =	0x00
 ORIENT_VERTICLE =	0x01
 
+
+def print_data(data,name='data'):
+   print(name)
+   print('decimal: ' ,data)
+   print('hex: [{}]'.format(', '.join(hex(x) for x in data)))
+   print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data)))
 
 class WT901:
 
@@ -304,42 +310,55 @@ class WT901:
    def save(self):
       self.Bus.write_word_data(self.Address,self.cfg.WIT_SAVE,SAVE_PARAM)
 
+
+   def writeRegisters(self,regAddress,rawvalue):
+
+
+      if type(rawvalue) == list:
+         if len(rawvalue)==2:
+            value = (rawvalue[0]<<8) | rawvalue[1]
+         else:
+            print('error: value is not 2 bytes')
+            print(rawvalue)
+            return -1
+      else:
+         value = rawvalue
+
+      return self.Bus.write_word_data(self.Address,regAddress,value)
+
+ 
+
+
    def set_Time(self):
       t = datetime.datetime.now()
-      yy = t.year-2000
-      print(hex(yy))
-      mm = t.month
-      print(hex(mm))
-      yymm = [yy&0xff,yy >>8,mm&0xff,mm>>8 ]
 
-      print('time yymm')
-      print('decimal: ' ,yymm)
-      print('hex: [{}]'.format(', '.join(hex(x) for x in yymm)))
-      print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in yymm)))
-      self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_YYMM,yymm)
+      yy = int(t.year-2000)
+      mm = int(t.month)
+
+      yymm = struct.pack('>h',(yy << 8) | mm)
+      self.writeRegisters(self.cfg.WIT_YYMM,struct.unpack('<h',yymm)[0])
 
       dd = t.day
       hh = t.hour
-      ddhh = [dd&0xff,dd >>8,hh&0xff,hh >>8]
 
-      print('time ddhh')
-      print('decimal: ' ,ddhh)
-      print('hex: [{}]'.format(', '.join(hex(x) for x in ddhh)))
-      print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in ddhh)))
-      self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_DDHH,ddhh)
-      # mm = t.minute
-      # ss = t.second
-      # mmss = [mm&0xff,mm >>8,ss&0xff,ss >>8]
-
-      # print('time mmss')
-      # print('decimal: ' ,mmss)
-      # print('hex: [{}]'.format(', '.join(hex(x) for x in mmss)))
-      # print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in mmss)))
-
-      ms = [t.microsecond]
-      print(ms)
+      ddhh = struct.pack('>h',(dd << 8) | hh)
+      self.writeRegisters(self.cfg.WIT_DDHH,struct.unpack('<h',ddhh)[0])
 
 
+      mm = t.minute
+      ss = t.second
+
+      mmss = struct.pack('>h',(mm << 8) | ss)
+      self.writeRegisters(self.cfg.WIT_MMSS,struct.unpack('<h',mmss)[0])
+
+      ms = t.microsecond
+      print('decimal: ',ms)
+      ddhh = struct.pack('>i',ms)
+
+      print_data(ddhh,name='time ddhh')
+      print_data(struct.unpack('<2h',ddhh),name='time ddhh')
+
+      print('==================end of set time==================')
  
       # self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_DDHH,ddhh)
 
@@ -350,54 +369,24 @@ class WT901:
 
    def get_Time(self):
 
-      datayymm = self.readRegisters(self.cfg.WIT_YYMM,4)
+      datayymm = self.readRegisters(self.cfg.WIT_YYMM,2)
 
-      yymmlow0 = datayymm[0]
-      yymmhigh0 = datayymm[1]
-      yymmlow1 = datayymm[2]
-      yymmhigh1 = datayymm[3]
+      # print_data(datayymm,name='time datayymm')
 
-      year = [(yymmhigh0<<8) | yymmlow0 ][0] + 2000
-      month = [(yymmhigh1<<8) | yymmlow1 ][0]
+      year = datayymm[0] + 2000
+      month = datayymm[1]
+
+      dataddhh = self.readRegisters(self.cfg.WIT_DDHH,2)
+
+      day = dataddhh[0]
+      hour = dataddhh[1]
 
 
+      datammss = self.readRegisters(self.cfg.WIT_MMSS,2)
 
 
-
-      dataddhh = self.readRegisters(self.cfg.WIT_DDHH,4)
-      ddhhlow0 = dataddhh[0]
-      ddhhhigh0 = dataddhh[1]
-      ddhhlow1 = dataddhh[2]
-      ddhhhigh1 = dataddhh[3]
-
-      day = [(ddhhhigh0<<8) | ddhhlow0 ]
-      hour = [(ddhhhigh1<<8) | ddhhlow1 ]
-
-      print('dataddhh binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in dataddhh)))
-      print(ddhhlow0)
-      print(ddhhhigh0)
-      print(ddhhlow1)
-      print(ddhhhigh1)
-      data0 = [(ddhhhigh0<<8) | ddhhlow0 ]
-      print('time yy')
-      print('decimal: ' ,data0)
-      print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
-      print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
-
-      data1 = [(ddhhhigh1<<8) | ddhhlow1 ]
-      print('time mm')
-      print('decimal: ' ,data1)
-      print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
-      print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
-
-      # datammss = self.readRegisters(self.cfg.WIT_MMSS,4)
-      # low0 = datammss[0]
-      # high0 = datammss[1]
-      # low1 = datammss[2]
-      # high1 = datammss[3]
-
-      # min = [(high0<<8) | low0 ]
-      # sec = [(high1<<8) | low1 ]
+      min = datammss[0]
+      sec = datammss[1]
 
       # datams = self.readRegisters(self.cfg.WIT_MS,2)
       # low0 = datams[0]
@@ -405,7 +394,7 @@ class WT901:
 
       # ms = [(high0<<8) | low0 ]
 
-      print('year: ',year,' month: ', month,' day: ', day,' hour: ', hour)#,' min: ',min,' sec: ',sec,' ms: ',ms)
+      print('year: ',year,' month: ', month,' day: ', day,' hour: ', hour,' min: ',min,' sec: ',sec)#,' ms: ',ms)
 
 
 
