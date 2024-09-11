@@ -103,7 +103,7 @@ class WT901:
       self.read_IICADDR()
       self.read_BAUD()
       self.read_RRATE()
-      self.read_RSW()
+      # self.read_RSW()
 
    def readRegisters(self,subaddress,count,raw=True):
       data = self.Bus.read_i2c_block_data(self.Address, subaddress, count)
@@ -211,6 +211,7 @@ class WT901:
 
    def read_AngularVelocity(self,verbose=False):
       datax = self.readRegisters(self.cfg.WIT_GX,2)
+      print(datax)
       low0 = datax[0]
       high0 = datax[1]
       datax = [(high0<<8) | low0 ]
@@ -293,10 +294,8 @@ class WT901:
 
    def read_Temp(self,verbose=False):
       data = self.readRegisters(self.cfg.WIT_TEMP,2)
-      low0 = data[0]
-      high0 = data[1]
-      data = [(high0<<8) | low0 ]
-      self.tempC = data[0]/100
+      temp_data = [(data[1]<<8) | data[0] ]
+      self.tempC = temp_data[0]/100
       self.tempF = (self.tempC * 9/5) + 32
       if verbose:
          print('temp')
@@ -306,10 +305,11 @@ class WT901:
 
    def unlock(self):
       self.Bus.write_i2c_block_data(self.Address,0x69,[0x88, 0xb5])
+      sleep(0.5)
 
    def save(self):
       self.Bus.write_word_data(self.Address,self.cfg.WIT_SAVE,SAVE_PARAM)
-
+      sleep(0.5)
 
    def writeRegisters(self,regAddress,rawvalue):
 
@@ -325,9 +325,6 @@ class WT901:
          value = rawvalue
 
       return self.Bus.write_word_data(self.Address,regAddress,value)
-
- 
-
 
    def set_Time(self):
       t = datetime.datetime.now()
@@ -351,27 +348,14 @@ class WT901:
       mmss = struct.pack('>h',(mm << 8) | ss)
       self.writeRegisters(self.cfg.WIT_MMSS,struct.unpack('<h',mmss)[0])
 
-      ms = t.microsecond
-      print('decimal: ',ms)
-      ddhh = struct.pack('>i',ms)
+      milisec = int(t.microsecond / 1000)
+      ms = struct.pack('>h',milisec)
 
-      print_data(ddhh,name='time ddhh')
-      print_data(struct.unpack('<2h',ddhh),name='time ddhh')
-
-      print('==================end of set time==================')
- 
-      # self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_DDHH,ddhh)
-
-      # self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_MMSS,mmss)
-
-      # self.Bus.write_i2c_block_data(self.Address,self.cfg.WIT_MS,ms)
-
+      self.writeRegisters(self.cfg.WIT_MS,struct.unpack('<h',ms)[0])
 
    def get_Time(self):
 
       datayymm = self.readRegisters(self.cfg.WIT_YYMM,2)
-
-      # print_data(datayymm,name='time datayymm')
 
       year = datayymm[0] + 2000
       month = datayymm[1]
@@ -388,22 +372,75 @@ class WT901:
       min = datammss[0]
       sec = datammss[1]
 
-      # datams = self.readRegisters(self.cfg.WIT_MS,2)
-      # low0 = datams[0]
-      # high0 = datams[1]
+      datams = self.readRegisters(self.cfg.WIT_MS,2)
+      ms = [(datams[0]<<8) | datams[1] ][0]
 
-      # ms = [(high0<<8) | low0 ]
 
-      print('year: ',year,' month: ', month,' day: ', day,' hour: ', hour,' min: ',min,' sec: ',sec)#,' ms: ',ms)
+      # print('year: ',year,' month: ', month,' day: ', day,' hour: ', hour,' min: ',min,' sec: ',sec,' ms: ',ms)
+
+
+   def set_Gyro_cal_time(self,val):
+      temp = struct.pack('>h',val)
+      self.writeRegisters(self.cfg.WIT_GYROCALTIME,struct.unpack('>h',temp)[0])
+      sleep(0.5)
+
+
+   def set_Accel_filt(self,val):
+      temp = struct.pack('>h',val)
+      self.writeRegisters(self.cfg.WIT_ACCFILT,struct.unpack('>h',temp)[0])
+      sleep(0.5)
+
+   def set_Filt_k(self,val):
+      temp = struct.pack('>h',val)
+      self.writeRegisters(self.cfg.WIT_FILTK,struct.unpack('>h',temp)[0])
+      sleep(0.5)
+
+   def set_Rate(self,val):
+      temp = struct.pack('>h',val)
+      self.writeRegisters(self.cfg.WIT_RRATE,struct.unpack('>h',temp)[0])
+      sleep(0.5)
+
+
+
+   def run_Calibration(self,val):
+
+      if type(val) == str:
+         try:
+            inputval = CALSW[val]
+         except:
+            return False
+      elif type(val) == int:
+         inputval = val
+      else:
+         return False         
+      temp = struct.pack('>h',inputval)
+      print_data(struct.unpack('<h',temp))
+      self.writeRegisters(self.cfg.WIT_FILTK,struct.unpack('<h',temp)[0])
+
+
+      if inputval == 1:
+         sleep(6)
+      elif inputval == 7:
+         sleep(10)
+      elif inputval == 9:
+         sleep(6)
+      else:
+         sleep(2)
+
+      return True
 
 
 
    def update(self):
+      self.read_RSW()
+      print(self.datacontent)
+      self.set_Time()
       self.read_Acceleration()
       self.read_Angle()
       self.read_AngularVelocity
       self.read_Mag()
       self.read_Temp()
+      self.datacontent = []
 
 address = 0x50
 bus = smbus.SMBus(1)
@@ -427,89 +464,31 @@ imu.unlock()
 
 # imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_RRATE,value1) # rate
 
+imu.set_Gyro_cal_time(500)
+imu.set_Accel_filt(500)
+imu.set_Filt_k(30)
+
+imu.set_Rate(0x0b)
+
+
+imu.writeRegisters(imu.cfg.WIT_AXIS6,0x00)
+sleep(0.5)
+
+
+# imu.writeRegisters(imu.cfg.WIT_AXIS6,0x00)
+# sleep(0.5)
+
+# imu.run_Calibration('NORMAL')
+# imu.run_Calibration('CALGYROACC')
+# imu.run_Calibration('CALMAGMM')
+
+
 imu.set_Time()
 imu.save()
 
 
 # imu.read_RRATE()
 # print('set rate to: ',imu.rate)
-
-# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_YYMM,[0x18,0x00,0x08,0x00]) # yy mm
-
-# data = imu.readRegisters(imu.cfg.WIT_YYMM,4)
-# low0 = data[0]
-# high0 = data[1]
-# low1 = data[2]
-# high1 = data[3]
-
-# data0 = [(high0<<8) | low0 ]
-# print('time yy')
-# print('decimal: ' ,data1)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
-
-# data1 = [(high1<<8) | low1 ]
-# print('time mm')
-# print('decimal: ' ,data1)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
-
-
-# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_DDHH,[0x1e,0x00,0x02,0x00]) # dd hh
-
-# data = imu.readRegisters(imu.cfg.WIT_DDHH,4)
-# low0 = data[0]
-# high0 = data[1]
-# low1 = data[2]
-# high1 = data[3]
-
-# data0 = [(high0<<8) | low0 ]
-# print('time dd')
-# print('decimal: ' ,data0)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
-
-# data1 = [(high1<<8) | low1 ]
-# print('time hh')
-# print('decimal: ' ,data1)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
-
-
-# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_MMSS,[0x0f,0x00,0x1e,0x00]) # mm ss
-
-# data = imu.readRegisters(imu.cfg.WIT_MMSS,4)
-# low0 = data[0]
-# high0 = data[1]
-# low1 = data[2]
-# high1 = data[3]
-
-# data0 = [(high0<<8) | low0 ]
-# print('time mm')
-# print('decimal: ' ,data0)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
-
-# data1 = [(high1<<8) | low1 ]
-# print('time ss')
-# print('decimal: ' ,data1)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data1)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data1)))
-
-# imu.Bus.write_i2c_block_data(imu.Address,imu.cfg.WIT_MS,[0xf4,0x01]) # mm ss
-
-# data = imu.readRegisters(imu.cfg.WIT_MS,2)
-# low0 = data[0]
-# high0 = data[1]
-
-# data0 = [(high0<<8) | low0 ]
-# print('time ms')
-# print('decimal: ' ,data0)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data0)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data0)))
-
-
-
 
 
 # imu.Bus.write_word_data(imu.Address,imu.cfg.WIT_CALSW,[0x03]) # calibrate
@@ -531,69 +510,58 @@ imu.save()
 # imu.Bus.write_word_data(imu.Address,0x61,value4)
 
 
-# data = imu.readRegisters(0x63,2)
-# low0 = data[0]
-# high0 = data[1]
-# data = [(high0<<8) | low0 ]
-# print(data)
 
-
-# data = imu.readRegisters(0x1a,2)
-# low0 = data[0]
-# high0 = data[1]
-# data = [(high0<<8) | low0 ]
-# print('address')
-# print('decimal: ' ,data)
-# print('hex: [{}]'.format(', '.join(hex(x) for x in data)))
-# print('binary: [{}]'.format(', '.join(bin(x)[2:].zfill(16) for x in data)))
-
-
+# imu.read_RSW()
 
 
 imu.update()
 
 imu.get_Time()
 
+print(imu.datacontent)
+
+
 startTime = time.time()
 currTime = startTime
 
-# print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
+print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
 
-# print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
+print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
 
-# print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
+print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
 
-# print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
+print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
 
-# print("temp:{0} ".format(imu.temp))
-
-
+print("temp:{0} ".format(imu.tempF))
 
 
 
 
-# while True:
-#    imu.update()
-
-#    newTime = time.time()
-#    dt = newTime - currTime
-#    currTime = newTime
-#    print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
-
-#    print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
-
-#    print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
-
-#    print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
-
-#    print("temp:{0} ".format(imu.tempF))
 
 
-#    totTime = currTime - startTime
-#    if totTime >= 10:
-#       break
+while True:
+   imu.update()
 
-#    time.sleep(0.1)
+   newTime = time.time()
+   dt = newTime - currTime
+   currTime = newTime
+   print(imu.datacontent)
+   print("roll:{0} Pitch:{1} Yaw:{2} ".format(imu.roll, imu.pitch, imu.yaw))
+
+   print("angular_vel_X:{0} angular_vel_Y:{1} angular_vel_Z:{2} ".format(imu.angVelX, imu.angVelY, imu.angVelZ))
+
+   print("accel_X:{0} accel_Y:{1} accel_Z:{2} ".format(imu.accelX, imu.accelY, imu.accelZ))
+
+   print("mag_X:{0} mag_Y:{1} mag_Z:{2} ".format(imu.magX, imu.magY, imu.magZ))
+
+   print("temp:{0} ".format(imu.tempF))
+
+
+   totTime = currTime - startTime
+   if totTime >= 10:
+      break
+
+   time.sleep(0.1)
 
 
 
